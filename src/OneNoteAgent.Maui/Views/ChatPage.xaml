@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:OneNoteAgent.Maui.ViewModels"
+             xmlns:models="clr-namespace:OneNoteAgent.Maui.Models"
+             x:Class="OneNoteAgent.Maui.Views.ChatPage"
+             x:DataType="vm:ChatViewModel"
+             Title="Copilot Chat"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}">
+
+    <Grid RowDefinitions="Auto, *, Auto, Auto" Padding="16">
+        
+        <!-- Header -->
+        <Grid ColumnDefinitions="*, Auto" Margin="0,0,0,16">
+            <VerticalStackLayout>
+                <Label Text="Copilot Chat" 
+                       FontSize="24" 
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}"/>
+                <Label Text="{Binding StatusMessage}" 
+                       FontSize="12" 
+                       TextColor="{StaticResource Gray500}"/>
+            </VerticalStackLayout>
+            
+            <Button Grid.Column="1"
+                    Text="Audit Log"
+                    Command="{Binding ViewAuditLogCommand}"
+                    BackgroundColor="Transparent"
+                    TextColor="{StaticResource Primary}"
+                    Margin="8,0"/>
+        </Grid>
+
+        <!-- Messages List -->
+        <CollectionView Grid.Row="1" 
+                        ItemsSource="{Binding Messages}"
+                        x:Name="MessagesCollectionView">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:ChatMessage">
+                    <Frame Margin="0,4" 
+                           Padding="12"
+                           CornerRadius="12"
+                           HasShadow="False"
+                           BackgroundColor="{Binding Role, Converter={StaticResource RoleToBackgroundColor}}">
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="*, Auto">
+                                <Label Text="{Binding Role, Converter={StaticResource RoleToDisplayName}}"
+                                       FontSize="10"
+                                       FontAttributes="Bold"
+                                       TextColor="{StaticResource Gray500}"
+                                       Margin="0,0,0,4"/>
+                                <!-- Streaming indicator -->
+                                <HorizontalStackLayout Grid.Column="1" 
+                                                       IsVisible="{Binding IsStreaming}"
+                                                       Spacing="4">
+                                    <ActivityIndicator IsRunning="{Binding IsStreaming}"
+                                                       HeightRequest="12"
+                                                       WidthRequest="12"
+                                                       Color="{StaticResource Primary}"/>
+                                    <Label Text="typing..."
+                                           FontSize="10"
+                                           TextColor="{StaticResource Gray400}"
+                                           FontAttributes="Italic"/>
+                                </HorizontalStackLayout>
+                            </Grid>
+                            <Label Text="{Binding Content, Mode=OneWay}"
+                                   FontSize="14"
+                                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                                   LineBreakMode="WordWrap"
+                                   Margin="0"/>
+                            <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
+                                   FontSize="10"
+                                   TextColor="{StaticResource Gray400}"
+                                   HorizontalOptions="End"
+                                   Margin="0,8,0,0"
+                                   IsVisible="{Binding IsStreaming, Converter={StaticResource InvertedBoolConverter}}"/>
+                        </VerticalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <!-- Status/Thinking Indicator -->
+        <Border Grid.Row="2" 
+                IsVisible="{Binding IsLoading}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray800}}"
+                StrokeShape="RoundRectangle 12"
+                Stroke="{StaticResource Gray300}"
+                Padding="12"
+                Margin="0,8">
+            <HorizontalStackLayout HorizontalOptions="Center" Spacing="8">
+                <ActivityIndicator IsRunning="{Binding IsLoading}" 
+                                   Color="{StaticResource Primary}"
+                                   HeightRequest="20"
+                                   WidthRequest="20"/>
+                <VerticalStackLayout>
+                    <Label Text="{Binding StatusMessage}" 
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"/>
+                    <Label Text="{Binding CurrentToolName, StringFormat='Tool: {0}'}"
+                           FontSize="11"
+                           TextColor="{StaticResource Gray500}"
+                           IsVisible="{Binding CurrentToolName, Converter={StaticResource IsNotNullConverter}}"/>
+                </VerticalStackLayout>
+            </HorizontalStackLayout>
+        </Border>
+
+        <!-- Input Area -->
+        <Grid Grid.Row="3" 
+              ColumnDefinitions="*, Auto" 
+              Margin="0,8,0,0">
+            <Frame Padding="0" 
+                   CornerRadius="24" 
+                   HasShadow="False"
+                   BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray800}}"
+                   BorderColor="{StaticResource Gray300}">
+                <Entry Placeholder="Ask me anything..."
+                       Text="{Binding MessageInput}"
+                       ReturnCommand="{Binding SendMessageCommand}"
+                       Margin="16,0"
+                       FontSize="14"/>
+            </Frame>
+            
+            <Button Grid.Column="1"
+                    Text="Send"
+                    Command="{Binding SendMessageCommand}"
+                    BackgroundColor="{StaticResource Primary}"
+                    TextColor="White"
+                    CornerRadius="24"
+                    WidthRequest="64"
+                    HeightRequest="48"
+                    Margin="8,0,0,0"
+                    IsEnabled="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"/>
+        </Grid>
+    </Grid>
+</ContentPage>
