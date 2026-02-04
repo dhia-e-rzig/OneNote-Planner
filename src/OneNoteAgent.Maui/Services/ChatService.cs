@@ -74,12 +74,20 @@ public sealed class ChatService : IChatService, IAsyncDisposable
                 //    Tools = ["*"]
                 //},
                 // Microsoft WorkIQ server - provides productivity tools
-                ["workiq"] = new McpLocalServerConfig
+                //["workiq"] = new McpLocalServerConfig
+                //{
+                //    Type = "stdio",
+                //    Command = "npx",
+                //    Args = ["-y", "@microsoft/workiq", "mcp"],
+                //    Tools = ["*"]
+                //},
+                // OneNote MCP server - provides OneNote integration
+                ["onenote"] = new McpLocalServerConfig
                 {
                     Type = "stdio",
-                    Command = "npx",
-                    Args = ["-y", "@microsoft/workiq", "mcp"],
-                    Tools = ["*"]
+                    Command = "node",
+                    Args = ["Q:/Random Projects/onenote-mcp/dist/index.js"],
+                    Tools = ["listNotebooks", "getNotebook", "listSections", "getSection", "listSectionGroups", "listSectionsInGroup", "listPages", "getPage", "search", "searchNotebooks", "searchSections", "searchSectionGroups", "searchPages"]
                 }
             }
         });
@@ -107,17 +115,34 @@ public sealed class ChatService : IChatService, IAsyncDisposable
             // Notify that we're thinking
             onUpdate?.Invoke(new StreamingUpdate(StreamingUpdateType.Thinking));
 
+            // Track current tool execution for capturing input
+            string? currentToolName = null;
+            string? currentToolInput = null;
+            
             // Subscribe to session events
             using var subscription = _session.On(evt =>
             {
+                // Log all event types to understand what's being sent
+                System.Diagnostics.Debug.WriteLine($"[ChatService] Event: {evt.GetType().Name}");
+                
+                
                 switch (evt)
                 {
                     case AssistantMessageDeltaEvent delta:
-                        // Streaming chunk - append incrementally
-                        responseBuilder.Append(delta.Data.DeltaContent);
+                        var content = delta.Data.DeltaContent;
+                        
+                        // Log all properties on the delta.Data to discover type indicators
+                        var dataType = delta.Data.GetType();
+                        var props = string.Join(", ", dataType.GetProperties()
+                            .Select(p => $"{p.Name}={p.GetValue(delta.Data)}"));
+                        System.Diagnostics.Debug.WriteLine($"[ChatService] Delta properties: {props}");
+                        
+                        // Regular response content - all AssistantMessageDeltaEvent goes to message
+                        // Reasoning should come via AssistantReasoningDeltaEvent
+                        responseBuilder.Append(content);
                         onUpdate?.Invoke(new StreamingUpdate(
                             StreamingUpdateType.TextDelta, 
-                            Content: delta.Data.DeltaContent));
+                            Content: content));
                         break;
                     
                     case AssistantMessageEvent msg:
@@ -126,23 +151,46 @@ public sealed class ChatService : IChatService, IAsyncDisposable
                         {
                             responseBuilder.Append(msg.Data.Content);
                         }
+
                         break;
                     
                     case AssistantReasoningDeltaEvent reasoningDelta:
-                        // Model is reasoning/thinking
+                        // Model is reasoning/thinking - send to thinking display, not message
+                        System.Diagnostics.Debug.WriteLine($"[ChatService] REASONING DELTA: {reasoningDelta.Data.DeltaContent?[..Math.Min(50, reasoningDelta.Data.DeltaContent?.Length ?? 0)]}...");
                         onUpdate?.Invoke(new StreamingUpdate(
                             StreamingUpdateType.Thinking,
                             Content: reasoningDelta.Data.DeltaContent));
                         break;
                     
                     case ToolExecutionStartEvent toolStart:
+                        currentToolName = toolStart.Data.ToolName;
+                        // Capture tool input arguments if available
+                        currentToolInput = SerializeToolResult(toolStart.Data.Arguments);
                         onUpdate?.Invoke(new StreamingUpdate(
                             StreamingUpdateType.ToolStarted,
-                            ToolName: toolStart.Data.ToolName));
+                            ToolName: toolStart.Data.ToolName,
+                            ToolInput: currentToolInput));
                         break;
                     
-                    case ToolExecutionCompleteEvent:
-                        onUpdate?.Invoke(new StreamingUpdate(StreamingUpdateType.ToolCompleted));
+                    case ToolExecutionCompleteEvent toolComplete:
+                        var toolOutput = SerializeToolResult(toolComplete.Data.Result);
+                        onUpdate?.Invoke(new StreamingUpdate(
+                            StreamingUpdateType.ToolCompleted,
+                            ToolName: currentToolName,
+                            ToolInput: currentToolInput,
+                            ToolResult: toolOutput));
+                        // Clear tool tracking
+                        currentToolName = null;
+                        currentToolInput = null;
+                        // Stay in tool phase - reasoning after tool completion should be treated as thinking
+                        onUpdate?.Invoke(new StreamingUpdate(StreamingUpdateType.Thinking));
+                        break;
+                    
+                    case AssistantReasoningEvent reasoning:
+                        // Complete reasoning block (non-streaming) - don't add to response
+                        onUpdate?.Invoke(new StreamingUpdate(
+                            StreamingUpdateType.Thinking,
+                            Content: reasoning.Data.Content));
                         break;
                     
                     case SessionIdleEvent:
@@ -202,5 +250,43 @@ public sealed class ChatService : IChatService, IAsyncDisposable
         }
 
         _isInitialized = false;
+    }
+
+    /// <summary>
+    /// Serializes the tool result to a string for display.
+    /// </summary>
+    private static string? SerializeToolResult(object? result)
+    {
+        if (result is null)
+            return null;
+
+        // If it's already a string, return it
+        if (result is string str)
+            return str;
+
+        // Try to serialize to JSON
+        try
+        {
+            return System.Text.Json.JsonSerializer.Serialize(result);
+        }
+        catch
+        {
+            return result.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Truncates tool result to a reasonable summary length.
+    /// </summary>
+    private static string? TruncateResult(string? result)
+    {
+        if (string.IsNullOrEmpty(result))
+            return null;
+
+        const int maxLength = 200;
+        if (result.Length <= maxLength)
+            return result;
+
+        return result[..maxLength] + "...";
     }
 }

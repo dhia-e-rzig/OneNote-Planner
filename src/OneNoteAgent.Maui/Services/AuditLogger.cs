@@ -30,6 +30,27 @@ public sealed class AuditLogger : IAuditLogger
         return Task.CompletedTask;
     }
 
+    public Task LogToolOperationAsync(
+        AuditOperation operation,
+        string toolName,
+        string? toolInput = null,
+        string? toolOutput = null,
+        CancellationToken cancellationToken = default)
+    {
+        var entry = new AuditLogEntry(
+            Id: Guid.NewGuid(),
+            Timestamp: DateTimeOffset.UtcNow,
+            Operation: operation,
+            Success: true,
+            ErrorMessage: null,
+            ToolName: toolName,
+            ToolInput: toolInput,
+            ToolOutput: toolOutput);
+
+        EnqueueAndTrim(entry);
+        return Task.CompletedTask;
+    }
+
     public Task LogFailureAsync(
         AuditOperation operation,
         string errorMessage,

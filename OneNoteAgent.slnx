@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/OneNoteAgent.Core/OneNoteAgent.Core.csproj" />
-    <Project Path="src/OneNoteAgent.Maui/OneNoteAgent.Maui.csproj" />
+    <Project Path="src/OneNoteAgent.Maui/OneNoteAgent.Maui.csproj">
+      <Deploy Solution="Debug|*" />
+    </Project>
   </Folder>
 </Solution>

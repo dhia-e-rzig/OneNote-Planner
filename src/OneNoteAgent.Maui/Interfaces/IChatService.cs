@@ -8,7 +8,9 @@ namespace OneNoteAgent.Maui.Interfaces;
 public record StreamingUpdate(
     StreamingUpdateType Type,
     string? Content = null,
-    string? ToolName = null);
+    string? ToolName = null,
+    string? ToolInput = null,
+    string? ToolResult = null);
 
 /// <summary>
 /// Types of streaming updates.

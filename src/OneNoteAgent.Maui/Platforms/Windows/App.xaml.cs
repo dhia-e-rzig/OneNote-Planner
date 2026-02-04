@@ -16,6 +16,9 @@ public partial class App : MauiWinUIApplication
     /// </summary>
     public App()
     {
+        // Required for PublishSingleFile deployment with Windows App SDK
+        Environment.SetEnvironmentVariable("MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY", AppContext.BaseDirectory);
+        
         this.UnhandledException += (s, e) =>
         {
             System.Console.WriteLine($"UNHANDLED: {e.Exception}");

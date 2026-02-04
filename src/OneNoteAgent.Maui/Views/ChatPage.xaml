@@ -11,7 +11,7 @@
     <Grid RowDefinitions="Auto, *, Auto, Auto" Padding="16">
         
         <!-- Header -->
-        <Grid ColumnDefinitions="*, Auto" Margin="0,0,0,16">
+        <Grid ColumnDefinitions="*, Auto, Auto" Margin="0,0,0,16">
             <VerticalStackLayout>
                 <Label Text="Copilot Chat" 
                        FontSize="24" 
@@ -23,8 +23,15 @@
             </VerticalStackLayout>
             
             <Button Grid.Column="1"
-                    Text="Audit Log"
-                    Command="{Binding ViewAuditLogCommand}"
+                    Text="Reset"
+                    Command="{Binding ResetConversationCommand}"
+                    BackgroundColor="Transparent"
+                    TextColor="{StaticResource Gray500}"
+                    Margin="0"/>
+            
+            <Button Grid.Column="2"
+                    Text="Activity"
+                    Command="{Binding ViewActivityCommand}"
                     BackgroundColor="Transparent"
                     TextColor="{StaticResource Primary}"
                     Margin="8,0"/>
@@ -34,13 +41,17 @@
         <CollectionView Grid.Row="1" 
                         ItemsSource="{Binding Messages}"
                         x:Name="MessagesCollectionView">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="4"/>
+            </CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:ChatMessage">
-                    <Frame Margin="0,4" 
-                           Padding="12"
-                           CornerRadius="12"
-                           HasShadow="False"
-                           BackgroundColor="{Binding Role, Converter={StaticResource RoleToBackgroundColor}}">
+                    <Border Padding="12"
+                            StrokeShape="RoundRectangle 12"
+                            Stroke="Transparent"
+                            StrokeThickness="0"
+                            Style="{x:Null}"
+                            Background="{Binding Role, Converter={StaticResource RoleToBackgroundColor}}">
                         <VerticalStackLayout>
                             <Grid ColumnDefinitions="*, Auto">
                                 <Label Text="{Binding Role, Converter={StaticResource RoleToDisplayName}}"
@@ -62,7 +73,9 @@
                                            FontAttributes="Italic"/>
                                 </HorizontalStackLayout>
                             </Grid>
-                            <Label Text="{Binding Content, Mode=OneWay}"
+                            <!-- Message content with markdown rendering -->
+                            <Label Text="{Binding Content, Mode=OneWay, Converter={StaticResource MarkdownToHtmlConverter}}"
+                                   TextType="Html"
                                    FontSize="14"
                                    TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
                                    LineBreakMode="WordWrap"
@@ -74,7 +87,7 @@
                                    Margin="0,8,0,0"
                                    IsVisible="{Binding IsStreaming, Converter={StaticResource InvertedBoolConverter}}"/>
                         </VerticalStackLayout>
-                    </Frame>
+                    </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
@@ -86,51 +99,82 @@
                 StrokeShape="RoundRectangle 12"
                 Stroke="{StaticResource Gray300}"
                 Padding="12"
-                Margin="0,8">
-            <HorizontalStackLayout HorizontalOptions="Center" Spacing="8">
-                <ActivityIndicator IsRunning="{Binding IsLoading}" 
-                                   Color="{StaticResource Primary}"
-                                   HeightRequest="20"
-                                   WidthRequest="20"/>
-                <VerticalStackLayout>
-                    <Label Text="{Binding StatusMessage}" 
-                           FontSize="14"
-                           FontAttributes="Bold"
-                           TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"/>
-                    <Label Text="{Binding CurrentToolName, StringFormat='Tool: {0}'}"
+                Margin="0,8"
+                MaximumHeightRequest="180">
+            <VerticalStackLayout>
+                <HorizontalStackLayout Spacing="8">
+                    <ActivityIndicator IsRunning="{Binding IsLoading}" 
+                                       Color="{StaticResource Primary}"
+                                       HeightRequest="20"
+                                       WidthRequest="20"/>
+                    <VerticalStackLayout>
+                        <Label Text="{Binding StatusMessage}" 
+                               FontSize="14"
+                               FontAttributes="Bold"
+                               TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"/>
+                        <Label Text="{Binding CurrentToolName, StringFormat='Tool: {0}'}"
+                               FontSize="11"
+                               TextColor="{StaticResource Gray500}"
+                               IsVisible="{Binding CurrentToolName, Converter={StaticResource IsNotNullConverter}}"/>
+                    </VerticalStackLayout>
+                </HorizontalStackLayout>
+                <ScrollView x:Name="ThinkingScrollView"
+                            IsVisible="{Binding ThinkingContent, Converter={StaticResource IsNotNullConverter}}"
+                            Margin="0,8,0,8"
+                            MaximumHeightRequest="100"
+                            VerticalScrollBarVisibility="Always">
+                    <Label Text="{Binding ThinkingContent}"
                            FontSize="11"
                            TextColor="{StaticResource Gray500}"
-                           IsVisible="{Binding CurrentToolName, Converter={StaticResource IsNotNullConverter}}"/>
-                </VerticalStackLayout>
-            </HorizontalStackLayout>
+                           FontAttributes="Italic"
+                           LineBreakMode="WordWrap"/>
+                </ScrollView>
+            </VerticalStackLayout>
         </Border>
 
         <!-- Input Area -->
         <Grid Grid.Row="3" 
               ColumnDefinitions="*, Auto" 
               Margin="0,8,0,0">
-            <Frame Padding="0" 
-                   CornerRadius="24" 
-                   HasShadow="False"
-                   BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray800}}"
-                   BorderColor="{StaticResource Gray300}">
-                <Entry Placeholder="Ask me anything..."
-                       Text="{Binding MessageInput}"
-                       ReturnCommand="{Binding SendMessageCommand}"
-                       Margin="16,0"
-                       FontSize="14"/>
-            </Frame>
+            <Border Padding="12,10" 
+                    StrokeShape="RoundRectangle 16"
+                    Stroke="{StaticResource Gray300}"
+                    StrokeThickness="1"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray800}}"
+                    VerticalOptions="End">
+                <Editor x:Name="MessageEditor"
+                        Placeholder="Ask me anything..."
+                        Text="{Binding MessageInput}"
+                        FontSize="14"
+                        AutoSize="TextChanges"
+                        BackgroundColor="Transparent"/>
+            </Border>
             
+            <!-- Send Button (visible when not loading) -->
             <Button Grid.Column="1"
                     Text="Send"
                     Command="{Binding SendMessageCommand}"
                     BackgroundColor="{StaticResource Primary}"
                     TextColor="White"
-                    CornerRadius="24"
+                    CornerRadius="16"
                     WidthRequest="64"
                     HeightRequest="48"
                     Margin="8,0,0,0"
-                    IsEnabled="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"/>
+                    VerticalOptions="End"
+                    IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"/>
+            
+            <!-- Stop Button (visible when loading) -->
+            <Button Grid.Column="1"
+                    Text="Stop"
+                    Command="{Binding StopCommand}"
+                    BackgroundColor="{StaticResource Danger}"
+                    TextColor="White"
+                    CornerRadius="16"
+                    WidthRequest="64"
+                    HeightRequest="48"
+                    Margin="8,0,0,0"
+                    VerticalOptions="End"
+                    IsVisible="{Binding IsLoading}"/>
         </Grid>
     </Grid>
 </ContentPage>

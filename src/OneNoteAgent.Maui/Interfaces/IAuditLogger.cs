@@ -15,6 +15,16 @@ public interface IAuditLogger
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Logs a tool operation with the tool name, input, and output
+    /// </summary>
+    Task LogToolOperationAsync(
+        AuditOperation operation,
+        string toolName,
+        string? toolInput = null,
+        string? toolOutput = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Logs an operation with failure status
     /// </summary>
     Task LogFailureAsync(

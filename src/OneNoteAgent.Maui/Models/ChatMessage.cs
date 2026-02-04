@@ -13,18 +13,18 @@ public partial class ChatMessage : ObservableObject
     public DateTimeOffset Timestamp { get; }
 
     [ObservableProperty]
-    private string _content;
+    public partial string Content { get; set; }
 
     [ObservableProperty]
-    private bool _isStreaming;
+    public partial bool IsStreaming { get; set; }
 
     public ChatMessage(Guid id, string role, string content, DateTimeOffset timestamp, bool isStreaming = false)
     {
         Id = id;
         Role = role;
-        _content = content;
+        Content = content;
         Timestamp = timestamp;
-        _isStreaming = isStreaming;
+        IsStreaming = isStreaming;
     }
 
     public static ChatMessage User(string content) =>

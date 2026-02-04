@@ -11,37 +11,46 @@ namespace OneNoteAgent.Maui.ViewModels;
 /// Manages conversation state using GitHub Copilot SDK chat service with streaming support.
 /// Slash commands are passed directly to Copilot CLI.
 /// </summary>
-#pragma warning disable MVVMTK0045 // WinRT AOT compatibility - acceptable for this app
 public partial class ChatViewModel : ObservableObject
 {
-    private readonly IAuditLogger _auditLogger;
-    private readonly IChatService _chatService;
-    private bool _isInitialized;
-    private ChatMessage? _streamingMessage;
+private readonly IAuditLogger _auditLogger;
+private readonly IChatService _chatService;
+private readonly INavigationService _navigationService;
+private bool _isInitialized;
+private ChatMessage? _streamingMessage;
+private CancellationTokenSource? _currentOperationCts;
+
+[ObservableProperty]
+public partial string MessageInput { get; set; }
 
     [ObservableProperty]
-    private string _messageInput = string.Empty;
+    public partial bool IsLoading { get; set; }
 
     [ObservableProperty]
-    private bool _isLoading;
+    public partial bool IsThinking { get; set; }
 
     [ObservableProperty]
-    private bool _isThinking;
+    public partial string StatusMessage { get; set; }
 
     [ObservableProperty]
-    private string _statusMessage = "Ready";
+    public partial string? CurrentToolName { get; set; }
 
     [ObservableProperty]
-    private string? _currentToolName;
+    public partial string? ThinkingContent { get; set; }
 
     public ObservableCollection<ChatMessage> Messages { get; } = [];
 
     public ChatViewModel(
         IAuditLogger auditLogger,
-        IChatService chatService)
+        IChatService chatService,
+        INavigationService navigationService)
     {
         _auditLogger = auditLogger;
         _chatService = chatService;
+        _navigationService = navigationService;
+
+        MessageInput = string.Empty;
+        StatusMessage = "Ready";
 
         // Add welcome message
         Messages.Add(ChatMessage.System(
@@ -51,7 +60,7 @@ public partial class ChatViewModel : ObservableObject
         // Initialize chat service on construction
         _ = InitializeAsync();
     }
-#pragma warning restore MVVMTK0045
+
 
     private async Task InitializeAsync()
     {
@@ -79,6 +88,13 @@ public partial class ChatViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    [RelayCommand]
+    private void ResetConversation()
+    {
+        Messages.Clear();
+        Messages.Add(ChatMessage.System("Conversation reset. How can I help you?"));
     }
 
     [RelayCommand]
@@ -111,6 +127,10 @@ public partial class ChatViewModel : ObservableObject
         _streamingMessage = ChatMessage.Assistant("", isStreaming: true);
         Messages.Add(_streamingMessage);
 
+        // Create cancellation token for this operation
+        _currentOperationCts?.Dispose();
+        _currentOperationCts = new CancellationTokenSource();
+
         try
         {
             IsLoading = true;
@@ -121,10 +141,28 @@ public partial class ChatViewModel : ObservableObject
             await _chatService.ProcessMessageAsync(
                 userMessage, 
                 Messages, 
-                OnStreamingUpdate);
+                OnStreamingUpdate,
+                _currentOperationCts.Token);
 
             // Mark streaming as complete (content was already updated via streaming)
             _streamingMessage?.CompleteStreaming();
+        }
+        catch (OperationCanceledException)
+        {
+            // User cancelled the operation
+            if (_streamingMessage is not null)
+            {
+                if (string.IsNullOrEmpty(_streamingMessage.Content))
+                {
+                    _streamingMessage.Content = "*Stopped*";
+                }
+                else
+                {
+                    _streamingMessage.AppendContent("\n\n*Stopped*");
+                }
+                _streamingMessage.CompleteStreaming();
+            }
+            StatusMessage = "Stopped";
         }
         catch (Exception ex)
         {
@@ -134,15 +172,25 @@ public partial class ChatViewModel : ObservableObject
                 _streamingMessage.Content = $"Error: {ex.Message}";
                 _streamingMessage.CompleteStreaming();
             }
+            await _auditLogger.LogFailureAsync(AuditOperation.Error, ex.Message);
         }
         finally
         {
             _streamingMessage = null;
+            _currentOperationCts?.Dispose();
+            _currentOperationCts = null;
             IsLoading = false;
             IsThinking = false;
             CurrentToolName = null;
+            ThinkingContent = null;
             StatusMessage = "Ready";
         }
+    }
+
+    [RelayCommand]
+    private void Stop()
+    {
+        _currentOperationCts?.Cancel();
     }
 
     private void OnStreamingUpdate(StreamingUpdate update)
@@ -159,22 +207,39 @@ public partial class ChatViewModel : ObservableObject
                         _streamingMessage.AppendContent(update.Content);
                     }
                     IsThinking = false;
+                    ThinkingContent = null;
                     StatusMessage = "Responding...";
                     break;
 
                 case StreamingUpdateType.Thinking:
                     IsThinking = true;
                     StatusMessage = "Thinking...";
+                    if (!string.IsNullOrEmpty(update.Content))
+                    {
+                        // Append thinking deltas rather than replacing
+                        ThinkingContent = (ThinkingContent ?? "") + update.Content;
+                    }
                     break;
 
                 case StreamingUpdateType.ToolStarted:
+                    // Clear thinking content when starting a new tool
+                    ThinkingContent = null;
                     CurrentToolName = update.ToolName;
                     StatusMessage = $"Using tool: {update.ToolName}";
                     break;
 
                 case StreamingUpdateType.ToolCompleted:
+                    if (!string.IsNullOrEmpty(update.ToolName))
+                    {
+                        _ = _auditLogger.LogToolOperationAsync(
+                            AuditOperation.ToolCall, 
+                            update.ToolName, 
+                            update.ToolInput, 
+                            update.ToolResult);
+                    }
                     CurrentToolName = null;
-                    StatusMessage = "Processing...";
+                    // Clear thinking content - fresh thinking will come via subsequent Thinking updates
+                    ThinkingContent = null;
                     break;
 
                 case StreamingUpdateType.Complete:
@@ -208,19 +273,8 @@ public partial class ChatViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task ViewAuditLogAsync()
+    private async Task ViewActivityAsync()
     {
-        var entries = await _auditLogger.GetRecentEntriesAsync(20);
-        
-        if (!entries.Any())
-        {
-            Messages.Add(ChatMessage.System("No audit log entries yet."));
-            return;
-        }
-
-        var log = string.Join("\n", entries.Select(e =>
-            $"[{e.Timestamp:HH:mm:ss}] {e.Operation} - {(e.Success ? "✓" : "✗ " + e.ErrorMessage)}"));
-
-        Messages.Add(ChatMessage.System($"**Recent Activity Log:**\n```\n{log}\n```"));
+        await _navigationService.NavigateToAsync<Views.ActivityPage>();
     }
 }

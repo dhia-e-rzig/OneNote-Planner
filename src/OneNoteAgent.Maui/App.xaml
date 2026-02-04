@@ -16,6 +16,9 @@
             <converters:RoleToBackgroundColorConverter x:Key="RoleToBackgroundColor" />
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter" />
             <converters:IsNotNullConverter x:Key="IsNotNullConverter" />
+            <converters:IsNullConverter x:Key="IsNullConverter" />
+            <converters:MarkdownToHtmlConverter x:Key="MarkdownToHtmlConverter" />
+            <converters:BoolToSuccessColorConverter x:Key="BoolToSuccessColorConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

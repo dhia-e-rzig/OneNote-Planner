@@ -34,15 +34,18 @@ public static class MauiProgram
 
         // Register services
         builder.Services.AddSingleton<IAuditLogger, AuditLogger>();
+        builder.Services.AddSingleton<INavigationService, NavigationService>();
         
         // Chat service with GitHub Copilot SDK integration
         builder.Services.AddSingleton<IChatService, ChatService>();
 
         // ViewModels
         builder.Services.AddTransient<ChatViewModel>();
+        builder.Services.AddTransient<ActivityViewModel>();
 
         // Pages
         builder.Services.AddTransient<ChatPage>();
+        builder.Services.AddTransient<ActivityPage>();
 
             Console.WriteLine("Services registered, building app...");
             var app = builder.Build();
